@@ -2,6 +2,8 @@
   (:require
    [reagent.core :as reagent]))
 
+(def curr-region (atom nil))
+(def selected-regions (atom #{}))
 (def mp (atom nil))
 (def feat (reagent/atom nil))
 (def event (atom nil))
@@ -15,12 +17,28 @@
   (let [rect (.getBoundingClientRect (.getElementById js/document "map"))]
     (reset! map-origin {:x (.-left rect) :y (.-top rect)})))
 
+(defn set-layer-filter [layer filter]
+  (.setFilter @mp layer (clj->js filter)))
+
+(defn set-selected-regions []
+  (set-layer-filter "california-counties-selected"
+                    (concat ["in" "region"] (into [] @selected-regions))))
+
+(defn set-no-hovers []
+  (set-layer-filter "california-counties-hover" ["==" "region" ""]))
+
 (defn load-map []
   (aset js/mapboxgl "accessToken" "pk.eyJ1IjoiZmVudG9udHJhdmVycyIsImEiOiJjamNpa3JobnozbnB6MnFsbG9sbmlhMzdrIn0.vh2s3V2spqauYIHskuyGuQ")
   (reset! mp (js/mapboxgl.Map. (clj->js {:container "map"
                                          :style "mapbox://styles/fentontravers/cjck1z0ca1tki2ss7dvud3bk6"})))
   (aset (.getCanvas @mp) "style" "cursor" "default")
-  (set-map-origin!))
+  (set-map-origin!)
+
+  ;; (.setFilter @mp "california-counties-selected" (clj->js (concat ["in" "region"] [])))
+
+  (.on @mp "style.load" (comp set-selected-regions set-no-hovers))
+
+  )
 
 (defn qrf-fn [pt]
   (let [qrf (.queryRenderedFeatures @mp (clj->js pt) layers)]
@@ -34,11 +52,26 @@
     (.-region (.-properties (first qrf)))
     nil))
 
+(defn toggle-select-region []
+  (.log js/console "toggling selected region")
+  (reset!
+   selected-regions
+   (if (contains? @selected-regions @curr-region)
+     (remove #{@curr-region} @selected-regions)
+     (set (conj @selected-regions @curr-region))))
+  (set-selected-regions)
+  (.log js/console "REGIONS: " (str  @selected-regions))
+  )
+
 (defn data-under-cursor [evt]
   (let [loc
         [(- (.-clientX evt) (:x @map-origin))
          (- (.-clientY evt) (:y @map-origin))]
         qrf (get-feat loc)]
+    (reset! curr-region qrf)
+    (if qrf
+      (set-layer-filter "california-counties-hover" ["==" "region" qrf])
+      (set-no-hovers))
     (.log js/console (str loc (if qrf (str " : " qrf))))))
 
 (defn the-map []
@@ -49,6 +82,7 @@
       
       [:div {:id "map"
              :on-mouse-move data-under-cursor
+             :on-mouse-up toggle-select-region
              :style {"width" "800px"
                      "height" "800px"}}])}))
 
@@ -59,7 +93,9 @@
   ;; find a point that actually returns something...
   (get-feat [460 650])
 
-
+  ;; highlights 'nocal' and 'socal'
+  
+  
   (.persist evt)
   (reset! pt (.-point evt))
   (reset! event evt))
@@ -69,9 +105,11 @@
 
 (defn page [state]
   [:table
-   [:td [some-component state]]
-   ;; [mapbox state]
-   [:td [the-map]]
+   [:tbody
+    [:tr
+     [:td [some-component state]]
+     ;; [mapbox state]
+     [:td [the-map]]]]
    ])
 
 (defonce app-state
