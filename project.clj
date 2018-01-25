@@ -5,7 +5,10 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.9.0"]
                  [reagent "0.7.0"]
-                 [hiccup "1.0.5"]
+                 ;; [reagent "0.8.0-alpha2"]
+                 [org.clojure/core.async "0.4.474"]
+                 [com.taoensso/timbre "4.8.0"]
+                 [re-com "2.1.0"]
                  [org.clojure/clojurescript "1.9.946"]]
 
   :source-paths ["src/cljs"]
@@ -36,5 +39,4 @@
                              [com.cemerick/piggieback "0.2.2"]
                              [org.clojure/tools.nrepl "0.2.13"]]
 
-              :plugins [[cider/cider-nrepl "0.16.0-SNAPSHOT"]]
               :repl-options {:nrepl-middleware [cemerick.piggieback/wrap-cljs-repl]}}})

@@ -1,123 +1,100 @@
 (ns sample-reagent.core
   (:require
-   [reagent.core :as reagent]))
+   [re-com.core :as recom]
+   [reagent.core :as reagent]
+   [sample-reagent.common-utils :as com]
+   [sample-reagent.allocation-map :as calif]
+   [sample-reagent.create-clusters :as clusters]))
 
-(def curr-region (atom nil))
-(def selected-regions (atom #{}))
-(def mp (atom nil))
-(def feat (reagent/atom nil))
-(def event (atom nil))
-(def layers (js-obj "layers" (clj->js ["california-counties"])))
-(def pt (atom nil))
-(def map-origin (atom nil))
-(defn obj-keys [obj]
-  (sort (js->clj (.keys js/Object obj))))
+(defonce map-state
+  (reagent/atom {:geography
+                 {:regions
+                  {0 {:region/name "San Mateo County, CA"}
+                   1 {:region/name "Siskiyou County, CA"}
+                   2 {:region/name "Lassen County, CA"}
+                   3 {:region/name "Del Norte County, CA"}
+                   4 {:region/name "Lake County, CA"}
+                   5 {:region/name "San Joaquin County, CA"}
+                   6 {:region/name "Butte County, CA"}
+                   7 {:region/name "Marin County, CA"}
+                   8 {:region/name "Nevada County, CA"}
+                   9 {:region/name "Mariposa County, CA"}
+                   10 {:region/name "Amador County, CA"}
+                   11 {:region/name "Modoc County, CA"}
+                   12 {:region/name "Humboldt County, CA"}
+                   13 {:region/name "San Diego County, CA"}
+                   14 {:region/name "Santa Barbara County, CA"}
+                   15 {:region/name "San Francisco County, CA"}
+                   16 {:region/name "Orange County, CA"}
+                   17 {:region/name "Santa Clara County, CA"}
+                   18 {:region/name "Mono County, CA"}
+                   19 {:region/name "Kings County, CA"}
+                   20 {:region/name "Colusa County, CA"}
+                   21 {:region/name "San Benito County, CA"}
+                   22 {:region/name "Tuolumne County, CA"}
+                   23 {:region/name "Sacramento County, CA"}
+                   24 {:region/name "Sierra County, CA"}
+                   25 {:region/name "Monterey County, CA"}
+                   26 {:region/name "Mendocino County, CA"}
+                   27 {:region/name "San Luis Obispo County, CA"}
+                   28 {:region/name "El Dorado County, CA"}
+                   29 {:region/name "Santa Cruz County, CA"}
+                   30 {:region/name "Alpine County, CA"}
+                   31 {:region/name "Madera County, CA"}
+                   32 {:region/name "Yolo County, CA"}
+                   33 {:region/name "Sutter County, CA"}
+                   34 {:region/name "Merced County, CA"}
+                   35 {:region/name "Inyo County, CA"}
+                   36 {:region/name "Stanislaus County, CA"}
+                   37 {:region/name "Plumas County, CA"}
+                   38 {:region/name "Alameda County, CA"}
+                   39 {:region/name "Tulare County, CA"}
+                   40 {:region/name "Napa County, CA"}
+                   41 {:region/name "Shasta County, CA"}
+                   42 {:region/name "Riverside County, CA"}
+                   43 {:region/name "Sonoma County, CA"}
+                   44 {:region/name "Ventura County, CA"}
+                   45 {:region/name "Contra Costa County, CA"}
+                   46 {:region/name "Glenn County, CA"}
+                   47 {:region/name "Calaveras County, CA"}
+                   48 {:region/name "Trinity County, CA"}
+                   49 {:region/name "Solano County, CA"}
+                   50 {:region/name "Kern County, CA"}
+                   51 {:region/name "Placer County, CA"}
+                   52 {:region/name "San Bernardino County, CA"}
+                   53 {:region/name "Los Angeles County, CA"}
+                   54 {:region/name "Fresno County, CA"}
+                   55 {:region/name "Imperial County, CA"}
+                   56 {:region/name "Tehama County, CA"}
+                   57 {:region/name "Yuba County, CA"}}
+                  :clusters
+                  {0 {:cluster/name "Top Shelf Valley"
+                      :class "card"
+                      :selected-regions [0 1 2 3]}
+                   1 {:cluster/name "Inland Desert"
+                      :class "card"
+                      :selected-regions [4 5 6 7]}}}}))
 
-(defn set-map-origin! []
-  (let [rect (.getBoundingClientRect (.getElementById js/document "map"))]
-    (reset! map-origin {:x (.-left rect) :y (.-top rect)})))
+(defn title []
+  [:div "This is the title"])
 
-(defn set-layer-filter [layer filter]
-  (.setFilter @mp layer (clj->js filter)))
+(defn body [map-state]
+  [recom/h-box
+   :gap "10px"
+   :justify :around
+   :children [
+              [clusters/clusters map-state]
+              (if (com/cluster-selected? map-state)
+                [calif/the-map map-state])]])
 
-(defn set-selected-regions []
-  (set-layer-filter "california-counties-selected"
-                    (concat ["in" "region"] (into [] @selected-regions))))
-
-(defn set-no-hovers []
-  (set-layer-filter "california-counties-hover" ["==" "region" ""]))
-
-(defn load-map []
-  (aset js/mapboxgl "accessToken" "pk.eyJ1IjoiZmVudG9udHJhdmVycyIsImEiOiJjamNpa3JobnozbnB6MnFsbG9sbmlhMzdrIn0.vh2s3V2spqauYIHskuyGuQ")
-  (reset! mp (js/mapboxgl.Map. (clj->js {:container "map"
-                                         :style "mapbox://styles/fentontravers/cjck1z0ca1tki2ss7dvud3bk6"})))
-  (aset (.getCanvas @mp) "style" "cursor" "default")
-  (set-map-origin!)
-
-  ;; (.setFilter @mp "california-counties-selected" (clj->js (concat ["in" "region"] [])))
-
-  (.on @mp "style.load" (comp set-selected-regions set-no-hovers))
-
-  )
-
-(defn qrf-fn [pt]
-  (let [qrf (.queryRenderedFeatures @mp (clj->js pt) layers)]
-    (if (= (count qrf) 0)
-      nil
-      qrf)))
-
-(defn get-feat [pt]
-  "where pt = [34 2]"
-  (if-let [qrf (qrf-fn pt)]
-    (.-region (.-properties (first qrf)))
-    nil))
-
-(defn toggle-select-region []
-  (.log js/console "toggling selected region")
-  (reset!
-   selected-regions
-   (if (contains? @selected-regions @curr-region)
-     (remove #{@curr-region} @selected-regions)
-     (set (conj @selected-regions @curr-region))))
-  (set-selected-regions)
-  (.log js/console "REGIONS: " (str  @selected-regions))
-  )
-
-(defn data-under-cursor [evt]
-  (let [loc
-        [(- (.-clientX evt) (:x @map-origin))
-         (- (.-clientY evt) (:y @map-origin))]
-        qrf (get-feat loc)]
-    (reset! curr-region qrf)
-    (if qrf
-      (set-layer-filter "california-counties-hover" ["==" "region" qrf])
-      (set-no-hovers))
-    (.log js/console (str loc (if qrf (str " : " qrf))))))
-
-(defn the-map []
-  (reagent/create-class
-   {:component-did-mount load-map
-    :reagent-render
-    (fn []
-      
-      [:div {:id "map"
-             :on-mouse-move data-under-cursor
-             :on-mouse-up toggle-select-region
-             :style {"width" "800px"
-                     "height" "800px"}}])}))
-
-(comment
-  ;; nothing at this point
-  (get-feat [782 659])
-
-  ;; find a point that actually returns something...
-  (get-feat [460 650])
-
-  ;; highlights 'nocal' and 'socal'
-  
-  
-  (.persist evt)
-  (reset! pt (.-point evt))
-  (reset! event evt))
-
-(defn some-component [ratom]
-  [:div (:text @ratom)])
-
-(defn page [state]
-  [:table
-   [:tbody
-    [:tr
-     [:td [some-component state]]
-     ;; [mapbox state]
-     [:td [the-map]]]]
-   ])
-
-(defonce app-state
-  (reagent/atom {:text "Hello, what is your name??"}))
+(defn page [map-state]
+  [recom/modal-panel
+   :child [recom/v-box
+           :children [[title]
+                      [body map-state]]]])
 
 (defn on-js-reload []
-  (reagent/render [page app-state]
-                  (.getElementById js/document "app")))
+  (reagent/render [page map-state] (.getElementById js/document "app")))
 
 (defn ^:export main []
   (on-js-reload))
