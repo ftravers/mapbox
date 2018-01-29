@@ -11,7 +11,7 @@
                  :error 8
                  :fatal 10})
 
-(def log-threshold (log-levels :trace))
+(def log-threshold (log-levels :debug))
 
 (defn log
   [level & msg]
@@ -108,11 +108,11 @@
 (defn region-selected? [map-state rgn-id]
   (boolean (some #{rgn-id} @(sub map-state [:geography :selected-regions]))))
 
-(defn determine-new-selected-regions-lst [map-state rgn-id]
+(defn new-selected-regions-lst [map-state rgn-id]
   "given the current list of selected regions, and the currently
 selected region, return a new list that either adds the new region to
-the list or if it exists in the list return a new list that doesn't
-contain it."
+the list or if it exists in the list already return a new list that
+doesn't contain it."
 (let [curr-cluster @(selected-cluster map-state)
         curr-regions @(sub map-state [:geography :selected-regions])]
     (if (region-selected? map-state rgn-id)
@@ -140,16 +140,17 @@ contain it."
 (defn toggle-region-membership [map-state rgn-id]
   "Call this to add or remove a region from the selected-regions
   list."
-  (let [new-regions (determine-new-selected-regions-lst map-state rgn-id)]
+  (let [new-regions (new-selected-regions-lst map-state rgn-id)]
     (set-selected-regions! map-state new-regions)))
 
 (defn sort-db-map [m sort-key db-key]
-  (sort-by sort-key (for [[k v] m] (assoc v db-key k))))
+  (sort-by (comp string/lower-case sort-key)
+           (for [[k v] m] (assoc v db-key k))))
 
 (defn get-next-db-id [db]
   (inc (apply max (keys db))))
 
-(defn add-new-cluster [map-state]
+(defn add-new-cluster [map-state refresh-map-fn]
   (let [cluster-name @(sub map-state [:geography :new-cluster-name])
         next-db-id (get-next-db-id @(all-clusters map-state))
         cluster (assoc @(all-clusters map-state) next-db-id

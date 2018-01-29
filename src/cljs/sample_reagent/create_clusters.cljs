@@ -109,14 +109,19 @@
 (defn regions-lst [map-state curr-cluster]
   (let [all-rgns (com/all-regions map-state)]
     (fn [map-state curr-cluster]
-     [recom/v-box
-      :gap "10px"
-      :children
-      [
-       (doall
-        (for [{:keys [region/id]}
-              (com/sort-db-map @(com/all-regions map-state) :region/name :region/id)]
-          ^{:key id} [region-row map-state id curr-cluster]))]])))
+      [recom/scroller
+       :v-scroll :auto
+       :height   "600px"
+       :padding "10px"
+       :child
+       [recom/v-box
+        :gap "10px"
+        :children
+        [
+         (doall
+          (for [{:keys [region/id]}
+                (com/sort-db-map @(com/all-regions map-state) :region/name :region/id)]
+            ^{:key id} [region-row map-state id curr-cluster]))]]])))
 
 (defn cluster-row [map-state clstr-id cluster]
   (let [class (com/sub map-state [:geography :clusters clstr-id :class])]
@@ -150,19 +155,24 @@
        :on-change #(com/setasync map-state [:geography :new-cluster-name] %)]
       [recom/button
        :label "Add Cluster"
-       :on-click (partial com/add-new-cluster map-state)]]]))
+       :on-click (partial com/add-new-cluster map-state )]]]))
 
 (defn cluster-lst [map-state]
   (let [clusters (com/all-clusters map-state)]
     (fn [map-state]
-     [recom/v-box
-      :gap "10px"
-      :children
-      (concat [[create-cluster map-state]]
-              (doall
-               (for [{:keys [cluster/id] :as clstr}
-                     (com/sort-db-map @(com/all-clusters map-state) :cluster/name :cluster/id)]
-                 ^{:key id} [cluster-row map-state id clstr])))])))
+      [recom/scroller
+       :v-scroll :auto
+       :height   "600px"
+       :padding "10px"
+       :child
+       [recom/v-box
+        :gap "10px"
+        :children
+        (concat (doall
+                 (for [{:keys [cluster/id] :as clstr}
+                       (com/sort-db-map @(com/all-clusters map-state) :cluster/name :cluster/id)]
+                   ^{:key id} [cluster-row map-state id clstr]))
+                [[create-cluster map-state]])]])))
 
 (defn clusters [map-state]
   (let [selctd-clstr (com/selected-cluster map-state)]

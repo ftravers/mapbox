@@ -1,10 +1,11 @@
-(ns sample-reagent.allocation-map
+(ns sample-reagent.mapbox
   (:require
    [re-com.core :as recom]
    [reagent.core :as reagent]
    [sample-reagent.common-utils :as com]))
 
 (def map-layer "calif-counties" )
+
 (defn obj-keys [obj]
   (sort (js->clj (.keys js/Object obj))))
 
@@ -35,10 +36,12 @@ of the cursor from its absolute coordinate."
 county name by adding it to the selected-regions list.  The selected regions
 list is populated by the function 'toggle-select-region', this merely changes
 which counties are allowed to be shown."
-  (set-layer-filter
-   (get-map-prop map-state :map)
-   "calif-counties-selected"
-   (concat ["in" "name"] (com/selected-regions-names map-state))))
+  (let [region-names (com/selected-regions-names map-state)]
+    (com/trace "Making visible regions: " region-names)
+    (set-layer-filter
+    (get-map-prop map-state :map)
+    "calif-counties-selected"
+    (concat ["in" "name"] region-names))))
 
 (defn set-no-hovers [mapbox]
   "When map first loads, hide the hovers layer by showing (filtering) only
@@ -48,8 +51,9 @@ each county."
 
 (defn toggle-select-region [map-state]
   "Called when we click on a region in the map."
-  (com/debug js/console "toggling selected region")
+  (com/debug "toggling selected region")
   (let [curr-region-name (get-map-prop map-state :curr-region)]
+    (com/trace "Region Clicked: " curr-region-name)
     (if-not (com/nil-or-empty? curr-region-name)
       (do (com/toggle-region-membership map-state (com/get-region-id map-state curr-region-name))
           (make-selected-regions-visible map-state)))))
@@ -74,13 +78,25 @@ each county."
       (set-no-hovers map))))
 
 (defn data-under-cursor [map-state evt]
-  (let [loc
-        [(- (.-clientX evt) (get-in @map-state [:geography :mapbox :x-coord-origin]))
-         (- (.-clientY evt) (get-in @map-state [:geography :mapbox :y-coord-origin]))]
-        county-name (get-feat (get-map-prop map-state :map) loc)]
+  (let [abs-x-coord (.-clientX evt)
+        abs-y-coord (.-clientY evt)
+        x-origin (get-in @map-state [:geography :mapbox :x-coord-origin])
+        y-origin (get-in @map-state [:geography :mapbox :y-coord-origin])
+        x-relative (- abs-x-coord x-origin)
+        y-relative (- abs-y-coord y-origin)
+        loc [x-relative y-relative]
+        county-name (get-feat (get-map-prop map-state :map) loc)
+        cursor-data {:x-abs abs-x-coord
+                     :y-abs abs-y-coord
+                     :x-origin x-origin
+                     :y-origin y-origin
+                     :x-relative x-relative
+                     :y-relative y-relative}]
+    (com/trace "Cursor Location Data: " cursor-data)
     (set-map-prop map-state :curr-region county-name)
     (highlight-region-under-cursor map-state county-name)
-    (com/trace js/console (str loc (if county-name (str " : " county-name))))))
+    ;; (com/trace js/console (str loc (if county-name (str " : " county-name))))
+    ))
 
 (defn load-map [map-state]
   (aset js/mapboxgl "accessToken" "pk.eyJ1IjoiZmVudG9udHJhdmVycyIsImEiOiJjamNpa3JobnozbnB6MnFsbG9sbmlhMzdrIn0.vh2s3V2spqauYIHskuyGuQ")

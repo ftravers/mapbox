@@ -1,10 +1,56 @@
 (ns sample-reagent.core
+  (:require-macros [cljs.core.async.macros :refer [go go-loop alt!]])
   (:require
+   [cljs.core.async :as async :refer [put! chan <! >! timeout close! mult tap]]
    [re-com.core :as recom]
    [reagent.core :as reagent]
    [sample-reagent.common-utils :as com]
-   [sample-reagent.allocation-map :as calif]
+   [sample-reagent.mapbox :as mapbox]
    [sample-reagent.create-clusters :as clusters]))
+
+;; This page is broken up into two sub components, the first is the
+;; list of clusters and regions.  The second is the interactive mapbox
+;; map of regions.  To allow these two components to communicate,
+;; without causing un-necessary coupling a pub-sub queue is used to
+;; handle inter component communication.  Here is a list of events
+;; that are sent:
+
+
+;; map-state documentation
+{;; everything lives under this root 
+ :geography
+ {
+  ;; This is the queue (core async channel) upon which
+  ;; information (events/messages) should be sent that need handling
+  ;; by a component outside the current components scope.
+  :send-queue (async/chan)
+
+  ;; Contains a function that takes one argument, a keyword that
+  ;; represents the type of message this channel will listen for.  For
+  ;; example, it could be the message: :region-list-modified, the
+  ;; would have as payload the list of regions that have been modified
+  :make-subscription (fn [event-name])
+
+  ;; the full list of all regions
+  :regions
+  {;; key is region id
+   0
+   {;; full region name
+    :region/name "San Mateo County, CA"}}
+
+  ;; the users defined clusters, keys are cluster ID's
+  :clusters
+  {;; cluster ID
+   0
+   {:cluster/name "Top Shelf Valley"
+
+    ;; the class the html element should be, can also be
+    ;; "card-hover" or "card-selected"
+    :class "card"
+
+    ;; the region ids that correspond to this cluster
+    :selected-regions [0 1 2 3]
+    }}}}
 
 (defonce map-state
   (reagent/atom {:geography
@@ -75,6 +121,120 @@
                       :class "card"
                       :selected-regions [4 5 6 7]}}}}))
 
+;; must call from go block
+(defn get-message [db msg-type]
+  (let [pub-queue (get-in @db [:geography :msg-type-pub-queue])
+        sub-channel (chan)]
+    (async/sub pub-queue msg-type sub-channel)
+    sub-channel))
+
+(defn all-msgs [db]
+  (let [m (get-in @db [:geography :mult])
+        msgs-ch (chan)]
+    (tap m msgs-ch)
+    msgs-ch))
+
+(def sample-msgs
+  {:toggle-region-membership
+   {:msg-type :toggle-region-membership
+    :cluster-internal-id 2
+    :region-id 2}
+
+   :cluster-deleted
+   {:msg-type :cluster-deleted
+    :cluster-id 2}
+
+   :new-cluster-created
+   {:msg-type :new-cluster-created
+    :cluster-name "abc123"}
+   })
+
+;; BUG: seems the queues are filling up after second put
+
+
+
+(defn send-msg [msg-name]
+  (let [send-queue (get-in @map-state [:geography :send-queue])
+        msg (msg-name sample-msgs)]
+    ;; (com/debug "MSG: " msg)
+    (go
+      (>! send-queue msg))))
+
+;; Setup event listeners
+(defn init [db]
+  ;; Setup the pub/sub queue
+  (let [send-queue (async/chan)
+        m (mult send-queue)
+        send-queue-copy (chan)]
+    (tap m send-queue-copy)
+    (swap! db assoc-in [:geography :mult] m)
+    (swap! db assoc-in [:geography :send-queue] send-queue)
+    (swap! db assoc-in [:geography :msg-type-pub-queue] (async/pub send-queue-copy :msg-type)))
+  
+
+
+  ;; ALL EVENTS will get captured by the following loop, used for
+  ;; logging, etc...
+  (let [toggle-region-membership-ch (get-message db :toggle-region-membership)
+        new-cluster-ch (get-message db :new-cluster-created)
+        cluster-deleted-ch (get-message db :cluster-deleted)]
+    (go-loop []
+      (alt!
+        toggle-region-membership-ch ([msg] (com/debug "Region Membership Changed."))
+        cluster-deleted-ch ( [msg] (com/debug "Cluster deleted."))
+        new-cluster-ch ([msg] (com/debug "New Cluster")))
+      (recur)))
+
+  (go-loop []
+    (com/debug "Event: " (<! (all-msgs db)))
+    (recur))
+
+  
+
+
+  ;; ---------------- Events --------------
+  ;; Each cluster has a list of regions which 'belong' to it, or of
+  ;; which it is made up of.  This event is used to add or remove a
+  ;; region from a cluster.
+  ;; (go-loop []
+  ;;   (.log js/console "abc" (str (<! (get-message db :blah))))
+  ;;   (recur))
+  
+  ;; (go-loop []
+  ;;   (let [message :toggle-region-membership
+  ;;         fields [cluster-internal-id region-name region-id]
+  ;;         {:keys fields} (<! (get-message db message))]
+
+  ;;     ;; update cluster with new list of regions
+  ;;     )
+  ;;   (recur))
+
+  ;; (go-loop []
+  ;;   (let [message :new-cluster-created
+  ;;         fields [cluster-name]
+  ;;         {:keys fields} (get-message db message)]
+  ;;     ;; get next internal ID for cluster
+
+  ;;     ;; external call to create new cluster
+  ;;     ;; data: cluster-name
+  ;;     )
+  ;;   (recur))
+
+  ;; (go-loop []
+  ;;   (let [message :cluster-deleted
+  ;;         fields [cluster-id]
+  ;;         {:keys fields} (get-message db message)]
+  ;;     ;; lookup external DB ID
+
+  ;;     ;; call externally to delete the given cluster
+  ;;     ;; data: extern-db-id of cluster
+  ;;     )
+  ;;   (recur))
+
+  )
+
+
+
 (defn title []
   [:div "This is the title"])
 
@@ -85,7 +245,7 @@
    :children [
               [clusters/clusters map-state]
               (if (com/cluster-selected? map-state)
-                [calif/the-map map-state])]])
+                [mapbox/the-map map-state])]])
 
 (defn page [map-state]
   [recom/modal-panel
@@ -94,9 +254,19 @@
                       [body map-state]]]])
 
 (defn on-js-reload []
+  ;; (init map-state)
   (reagent/render [page map-state] (.getElementById js/document "app")))
 
 (defn ^:export main []
   (on-js-reload))
 
 (on-js-reload)
+
+
+
+;; (go-loop []
+;;   (let [{:keys [text]} (<! output-chan)]
+;;     (println text)
+;;     (recur)))
+
+;; (>!! input-chan {:msg-type :greeting :text "hi"})
