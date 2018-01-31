@@ -75,7 +75,28 @@ write-to-chan with the supplied pub-fn. "
       (print-channel "Cats Channel: " cats-ch)
 
       write-to-ch))
+  
+  (send-some-testdata (test-channels))
 
-  (def write-ch (test-channels))
+  (defn pub-n-everything [pub-topic-fn]
+    "Create a pub channel that we can subscribe to and return a channel that gets all the messages.
 
-  (send-some-testdata write-ch))
+write-to-ch: send messages for broadcast here
+
+all-ch: a channel that all messages can be read from
+
+pub-queue: a publication queue based on the supplied pub-topic-fn that
+can be used for creating subscriptions
+"
+
+    (let [[write-to-ch tap-me-mult pub-queue] (setup-channels pub-topic-fn)
+          all-ch (async/chan)]
+      (async/tap tap-me-mult all-ch)
+      [all-ch write-to-ch pub-queue]))
+
+  
+  )
+
+;; --------------------------------------------
+
+(defn setup-pubs [])

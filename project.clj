@@ -11,7 +11,7 @@
                  [re-com "2.1.0"]
                  [org.clojure/clojurescript "1.9.946"]]
 
-  :source-paths ["src/cljs"]
+  :source-paths ["src/clj" "src/cljc"]
 
   :plugins [[lein-cljsbuild "1.1.7"  :exclusions [[org.clojure/clojure]]]
             [lein-figwheel "0.5.13"]]

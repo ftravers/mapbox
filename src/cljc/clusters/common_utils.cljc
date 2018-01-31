@@ -1,7 +1,5 @@
 (ns sample-reagent.common-utils
-  (:require
-   [clojure.string :as string]
-   [reagent.core :as reagent]))
+  (:require [clojure.string :as string]))
 
 ;; ----------------------- logging
 (def log-levels {:trace 1
@@ -16,7 +14,9 @@
 (defn log
   [level & msg]
   (if (>= level log-threshold)
-    (.log js/console (apply str msg))))
+    (let [one-str (apply str msg)]
+      #?(:cljs (.log js/console one-str)
+         :clj (println one-str)))))
 
 (defn info [& msg]
   (log (log-levels :info) msg))
@@ -31,9 +31,7 @@
   (or (nil? strng) (empty? strng)))
 ;; ---------------------------- clusters
 
-(defn sub [db path]
-  "db is reagent/atom"
-  (reagent/cursor db path))
+
 
 (defn setsync [db path val]
   (swap! db assoc-in path val))

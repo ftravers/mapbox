@@ -1,7 +1,10 @@
-(ns sample-reagent.core
-  (:require-macros [cljs.core.async.macros :refer [go go-loop alt!]])
+(ns clusters.core
+  #?(:cljs
+     (:require-macros [cljs.core.async.macros :refer [go go-loop alt!]]))
   (:require
-   [cljs.core.async :as async :refer [put! chan <! >! timeout close! mult tap]]
+   #?(:cljs [cljs.core.async :as async]
+      :clj [clojure.core.async :as async :refer [go go-loop]])
+   [clusters.channels :as pub-sub]
    [re-com.core :as recom]
    [reagent.core :as reagent]
    [sample-reagent.common-utils :as com]
@@ -20,16 +23,16 @@
 {;; everything lives under this root 
  :geography
  {
-  ;; This is the queue (core async channel) upon which
+  ;; This is the channel (core async queue) upon which
   ;; information (events/messages) should be sent that need handling
   ;; by a component outside the current components scope.
-  :send-queue (async/chan)
+  :send-ch (async/chan)
 
   ;; Contains a function that takes one argument, a keyword that
   ;; represents the type of message this channel will listen for.  For
   ;; example, it could be the message: :region-list-modified, the
   ;; would have as payload the list of regions that have been modified
-  :make-subscription (fn [event-name])
+  :make-subscription-fn (fn [event-name])
 
   ;; the full list of all regions
   :regions
@@ -151,48 +154,43 @@
 
 ;; BUG: seems the queues are filling up after second put
 
-
-
 (defn send-msg [msg-name]
-  (let [send-queue (get-in @map-state [:geography :send-queue])
+  (let [send-queue (get-in @map-state [:geography :send-ch])
         msg (msg-name sample-msgs)]
     ;; (com/debug "MSG: " msg)
     (go
       (>! send-queue msg))))
 
+(defn set-prop [db prop val]
+  (swap! db assoc-in (into [] (flatten (conj [:geography] prop))) val))
+
 ;; Setup event listeners
 (defn init [db]
-  ;; Setup the pub/sub queue
-  (let [send-queue (async/chan)
-        m (mult send-queue)
-        send-queue-copy (chan)]
-    (tap m send-queue-copy)
-    (swap! db assoc-in [:geography :mult] m)
-    (swap! db assoc-in [:geography :send-queue] send-queue)
-    (swap! db assoc-in [:geography :msg-type-pub-queue] (async/pub send-queue-copy :msg-type)))
+  (let [[send-ch all-msgs-ch sub-fn] (pub-sub/pub-n-everything :msg-type) ] 
+    (-> db
+        (set-prop [:send-ch] send-ch)
+        (set-prop [:make-subscription-fn] sub-fn)))
+
+  ;; setup debugging of all messages
+  (go-loop []
+    (com/debug (str (<! :all-messages-ch)))
+    (recur))
   
+  (go-loop []
+    (let [toggle-region-membership-ch (sub-fn :toggle-region-membership)
+          cluster-created-ch (sub-fn :cluster-created)
+          cluster-deleted-ch (sub-fn :cluster-deleted)]
 
-
-  ;; ALL EVENTS will get captured by the following loop, used for
-  ;; logging, etc...
-  (let [toggle-region-membership-ch (get-message db :toggle-region-membership)
-        new-cluster-ch (get-message db :new-cluster-created)
-        cluster-deleted-ch (get-message db :cluster-deleted)]
-    (go-loop []
+      ;; ---------------- Events --------------
       (alt!
         toggle-region-membership-ch ([msg] (com/debug "Region Membership Changed."))
-        cluster-deleted-ch ( [msg] (com/debug "Cluster deleted."))
-        new-cluster-ch ([msg] (com/debug "New Cluster")))
-      (recur)))
+        cluster-deleted-ch ([msg] (com/debug "Cluster deleted."))
+        cluster-created-ch ([msg] (com/debug "Cluster created.")))
+      ))
 
-  (go-loop []
-    (com/debug "Event: " (<! (all-msgs db)))
-    (recur))
-
-  
+  )
 
 
-  ;; ---------------- Events --------------
   ;; Each cluster has a list of regions which 'belong' to it, or of
   ;; which it is made up of.  This event is used to add or remove a
   ;; region from a cluster.
@@ -231,7 +229,6 @@
   ;;     )
   ;;   (recur))
 
-  )
 
 
 
