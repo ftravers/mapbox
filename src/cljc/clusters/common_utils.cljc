@@ -1,5 +1,7 @@
-(ns sample-reagent.common-utils
-  (:require [clojure.string :as string]))
+(ns clusters.common-utils
+  (:require [clojure.string :as string]
+            [clojure.set :as c-set]
+            [reagent.core :as reagent]))
 
 ;; ----------------------- logging
 (def log-levels {:trace 1
@@ -14,7 +16,8 @@
 (defn log
   [level & msg]
   (if (>= level log-threshold)
-    (let [one-str (apply str msg)]
+    (let [log-level-str (str "[" (string/upper-case (name ((c-set/map-invert log-levels) level))) "]: ")
+          one-str (str log-level-str (apply str msg))]
       #?(:cljs (.log js/console one-str)
          :clj (println one-str)))))
 
@@ -30,8 +33,6 @@
 (defn nil-or-empty? [strng]
   (or (nil? strng) (empty? strng)))
 ;; ---------------------------- clusters
-
-
 
 (defn setsync [db path val]
   (swap! db assoc-in path val))
@@ -50,6 +51,12 @@
 
 ;; (defn rm [path]
 ;;   (a-util/disock-in-sync path))
+
+(defn sub [db path]
+"In a cljs context we return a reagent cursor, the a clj context a
+regular atom."
+  #?(:cljs (reagent/cursor db path)
+     :clj (atom (get-in db path))))
 
 (defn all-regions [map-state]
   "List of all regions."

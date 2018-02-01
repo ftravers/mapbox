@@ -1,23 +1,19 @@
-(ns sample-reagent.mapbox
+(ns clusters.mapbox
   (:require
    [re-com.core :as recom]
    [reagent.core :as reagent]
-   [sample-reagent.common-utils :as com]))
+   [clusters.common-utils :as com]))
 
 (def map-layer "calif-counties" )
 
-(defn obj-keys [obj]
-  (sort (js->clj (.keys js/Object obj))))
-
-;; data that is use only in this file should be prefixed
-;; with the following path:
-(def this-file-data-prefix [:geography :mapbox])
+;; (defn obj-keys [obj]
+;;   (sort (js->clj (.keys js/Object obj))))
 
 (defn set-map-prop [map-state prop val]
-  (swap! map-state assoc-in (conj this-file-data-prefix prop) val))
+  (swap! map-state assoc-in (conj [:geography :mapbox] prop) val))
 
 (defn get-map-prop [map-state prop]
-  (get-in @map-state (conj this-file-data-prefix prop)))
+  (get-in @map-state (conj [:geography :mapbox] prop)))
 
 (defn set-map-origin! [map-state]
   "We need to find the top left corner coordinates of the map so that in
@@ -64,7 +60,7 @@ each county."
       nil
       qrf)))
 
-(defn get-feat [map pt]
+(defn get-county-name [map pt]
   "Retrieves the properties, such as county name from the given point
   on the map."
   (if-let [qrf (qrf-fn map pt)]
@@ -85,7 +81,7 @@ each county."
         x-relative (- abs-x-coord x-origin)
         y-relative (- abs-y-coord y-origin)
         loc [x-relative y-relative]
-        county-name (get-feat (get-map-prop map-state :map) loc)
+        county-name (get-county-name (get-map-prop map-state :map) loc)
         cursor-data {:x-abs abs-x-coord
                      :y-abs abs-y-coord
                      :x-origin x-origin
@@ -94,9 +90,7 @@ each county."
                      :y-relative y-relative}]
     (com/trace "Cursor Location Data: " cursor-data)
     (set-map-prop map-state :curr-region county-name)
-    (highlight-region-under-cursor map-state county-name)
-    ;; (com/trace js/console (str loc (if county-name (str " : " county-name))))
-    ))
+    (highlight-region-under-cursor map-state county-name)))
 
 (defn load-map [map-state]
   (aset js/mapboxgl "accessToken" "pk.eyJ1IjoiZmVudG9udHJhdmVycyIsImEiOiJjamNpa3JobnozbnB6MnFsbG9sbmlhMzdrIn0.vh2s3V2spqauYIHskuyGuQ")
@@ -122,6 +116,9 @@ each county."
     (fn [map-state]
       [:div {:id "map"
              :on-mouse-move (partial data-under-cursor map-state)
+
              :on-mouse-up (partial toggle-select-region map-state)
+
+
              :style {"width" "500px"
                      "height" "600px"}}])}))

@@ -35,14 +35,15 @@ This might be considered a lower level api with more flexibility than we need."
 This is a narrower API for the specific use case of needing one
 everything channel for logging, and a pub queue for signing
 up (subscribing) for different message types."
-  (let [[write-to-ch tap-me-mult pub-queue] (setup-channels pub-topic-fn)
+  (let [[write-to-ch tap-me-mult pub-queue]
+        (setup-channels pub-topic-fn)
         all-ch (async/chan)
         subscriber-fn #(let [sub-ch (async/chan)]
                          (async/sub pub-queue % sub-ch)
                          sub-ch)]
     (async/tap tap-me-mult all-ch)
     
-    [write-to-ch all-ch pub-queue]))
+    [write-to-ch all-ch subscriber-fn]))
 
 (defn sub-to-pub [pub-fn-val a-pub-queue]
   "Given a publication queue, a-pub-queue, and a value, pub-fn-val,

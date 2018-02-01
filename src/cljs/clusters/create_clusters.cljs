@@ -1,9 +1,9 @@
-(ns sample-reagent.create-clusters
+(ns clusters.create-clusters
   (:require
    [re-com.core :as recom]
    [clojure.string :as string]
    [reagent.core :as reagent]
-   [sample-reagent.common-utils :as com]))
+   [clusters.common-utils :as com]))
 
 (def ms (reagent/atom {:geography
                        {:regions
